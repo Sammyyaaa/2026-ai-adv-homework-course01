@@ -27,6 +27,14 @@ createApp({
       return Object.keys(errors.value).length === 0;
     }
 
+    async function mergeGuestCart() {
+      try {
+        await apiFetch('/api/cart/merge', { method: 'POST' });
+      } catch {
+        // 合併失敗不阻斷登入流程
+      }
+    }
+
     async function handleLogin() {
       if (!validateLogin() || submitting.value) return;
       submitting.value = true;
@@ -36,6 +44,7 @@ createApp({
           body: JSON.stringify(loginForm.value)
         });
         Auth.login(res.data.token, res.data.user);
+        await mergeGuestCart();
         Notification.show('登入成功', 'success');
         const params = new URLSearchParams(window.location.search);
         window.location.href = params.get('redirect') || '/';
@@ -55,6 +64,7 @@ createApp({
           body: JSON.stringify(registerForm.value)
         });
         Auth.login(res.data.token, res.data.user);
+        await mergeGuestCart();
         Notification.show('註冊成功', 'success');
         const params = new URLSearchParams(window.location.search);
         window.location.href = params.get('redirect') || '/';

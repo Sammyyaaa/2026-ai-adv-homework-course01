@@ -374,4 +374,65 @@ router.delete('/:itemId', dualAuth, (req, res) => {
   });
 });
 
+/**
+ * @openapi
+ * /api/cart/merge:
+ *   post:
+ *     summary: 合併訪客購物車至登入用戶
+ *     tags: [Cart]
+ *     security:
+ *       - bearerAuth: []
+ *     description: 登入後呼叫，將 X-Session-Id 對應的訪客購物車合併至當前用戶。相同商品累加數量（不超過庫存），其餘直接轉移。
+ *     responses:
+ *       200:
+ *         description: 合併完成
+ *       401:
+ *         description: 未登入
+ */
+router.post('/merge', dualAuth, (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ data: null, error: 'UNAUTHORIZED', message: '請先登入' });
+    }
+
+    const sessionId = req.sessionId;
+    if (!sessionId) {
+      return res.json({ data: null, error: null, message: '無訪客購物車' });
+    }
+
+    const userId = req.user.userId;
+    const sessionItems = db.prepare('SELECT * FROM cart_items WHERE session_id = ?').all(sessionId);
+
+    if (sessionItems.length === 0) {
+      return res.json({ data: null, error: null, message: '訪客購物車為空' });
+    }
+
+    const mergeTransaction = db.transaction(() => {
+      for (const item of sessionItems) {
+        const existing = db.prepare(
+          'SELECT * FROM cart_items WHERE user_id = ? AND product_id = ?'
+        ).get(userId, item.product_id);
+
+        if (existing) {
+          const product = db.prepare('SELECT stock FROM products WHERE id = ?').get(item.product_id);
+          const maxQty = product ? product.stock : existing.quantity;
+          const newQty = Math.min(existing.quantity + item.quantity, maxQty);
+          db.prepare('UPDATE cart_items SET quantity = ? WHERE id = ?').run(newQty, existing.id);
+          db.prepare('DELETE FROM cart_items WHERE id = ?').run(item.id);
+        } else {
+          db.prepare(
+            'UPDATE cart_items SET session_id = NULL, user_id = ? WHERE id = ?'
+          ).run(userId, item.id);
+        }
+      }
+    });
+
+    mergeTransaction();
+
+    res.json({ data: null, error: null, message: '購物車合併成功' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
