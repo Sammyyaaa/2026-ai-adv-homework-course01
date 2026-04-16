@@ -1,6 +1,27 @@
+function updateCartBadge() {
+  var cartBadge = document.getElementById('cart-badge');
+  if (!cartBadge) return;
+  apiFetch('/api/cart').then(function (res) {
+    if (res && res.data && res.data.items) {
+      var count = res.data.items.length;
+      if (count > 0) {
+        cartBadge.textContent = count;
+        cartBadge.style.display = 'flex';
+      } else {
+        cartBadge.style.display = 'none';
+      }
+    }
+  }).catch(function () {});
+}
+
+window.addEventListener('pageshow', function (event) {
+  if (event.persisted) {
+    updateCartBadge();
+  }
+});
+
 document.addEventListener('DOMContentLoaded', function () {
   const authNav = document.getElementById('auth-nav');
-  const cartBadge = document.getElementById('cart-badge');
   const ordersLink = document.getElementById('orders-link');
 
   if (authNav) {
@@ -22,12 +43,5 @@ document.addEventListener('DOMContentLoaded', function () {
     ordersLink.style.display = Auth.isLoggedIn() ? '' : 'none';
   }
 
-  if (cartBadge) {
-    apiFetch('/api/cart').then(function (res) {
-      if (res && res.data && res.data.items && res.data.items.length > 0) {
-        cartBadge.textContent = res.data.items.length;
-        cartBadge.style.display = 'flex';
-      }
-    }).catch(function () {});
-  }
+  updateCartBadge();
 });
